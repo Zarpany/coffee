@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+
+# Si algún día guardas credenciales reales en un archivo aparte,
+# asegúrate de que quede excluido aquí también.
