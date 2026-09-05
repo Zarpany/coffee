@@ -38,8 +38,3 @@ Carga `schema.sql` en tu base MySQL (por phpMyAdmin o `mysql -u user -p
 < schema.sql`) antes de usar la app — crea las tablas y los datos
 iniciales del catálogo.
 
-## Despliegue
-
-Ver `README-INFINITYFREE.md` en el zip de entrega para el paso a paso
-específico de subir esto a un hosting gratuito tipo InfinityFree
-(build compilado + backend PHP + base de datos).
