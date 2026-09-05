@@ -5,7 +5,10 @@ import { useState, useRef, useEffect, useCallback } from "react";
 const API_BASE = "/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type ProductId = "cafe" | "leche" | "pan" | "gomitas";
+// string genérico (no una unión fija de claves) a propósito: los productos de
+// venta salen de la base de datos, así que agregar uno nuevo en `productos`
+// (tabla) no debe requerir tocar este archivo ni recompilar.
+type ProductId = string;
 
 interface ProductoApi {
   id: number;
@@ -14,6 +17,8 @@ interface ProductoApi {
   emoji: string;
   precio: number;
   costo_unitario: number;
+  fondo: string | null;   // hex, viene de la tabla `colores` vía productos.php
+  acento: string | null;  // hex, viene de la tabla `colores` vía productos.php
 }
 
 interface InventarioItem {
@@ -22,6 +27,13 @@ interface InventarioItem {
   emoji: string;
   stock_actual: number;
   stock_minimo: number;
+}
+
+interface InsumoCompra {
+  clave: string;
+  nombre: string;
+  emoji: string;
+  precio: number;
 }
 
 interface VentaLog {
@@ -54,22 +66,15 @@ interface Balance {
   balance_real: number;
 }
 
-// ─── Static Data (solo presentación; los datos reales vienen de la API) ────────
-const MISC_PURCHASES = [
-  { clave: "bolsa_cafe",  label: "Café en grano (500g)", emoji: "☕", amount: 27000 },
-  { clave: "leche_polvo", label: "Leche en polvo (1kg)", emoji: "🥛", amount: 21000 },
-  { clave: "azucar",      label: "Azúcar",               emoji: "🍚", amount:  3000 },
-  { clave: "vasos",       label: "Vasos 5oz",             emoji: "🥤", amount:  2500 },
-];
-
+// ─── Static Data (solo lo que NO puede salir de la base: el modal de pan es
+// un caso especial con cantidad y precio variables, distinto a los insumos
+// de precio fijo que ya vienen de productos.php como insumos_compra) ────────
 const PAN_QTY_OPTIONS    = [20, 22, 24, 26];
 const PAN_PRICE_OPTIONS  = [10000, 11000, 12000, 13000, 14000];
-const PRODUCT_COLORS: Record<ProductId, { bg: string; accent: string }> = {
-  cafe:    { bg: "var(--color-cafe)",    accent: "var(--color-cafe-accent)" },
-  leche:   { bg: "var(--color-leche)",   accent: "var(--color-leche-accent)" },
-  pan:     { bg: "var(--color-pan)",     accent: "var(--color-pan-accent)" },
-  gomitas: { bg: "var(--color-gomitas)", accent: "var(--color-gomitas-accent)" },
-};
+
+// Color de respaldo si un producto no tiene color_id asignado en la base
+// (fondo/acento vienen NULL de productos.php en ese caso)
+const DEFAULT_COLORS = { bg: "var(--color-surface)", accent: "var(--color-text)" };
 
 const fmt = (n: number) => (n < 0 ? "-$" : "$") + Math.abs(n).toLocaleString("es-CL");
 
@@ -107,6 +112,7 @@ export default function App() {
   // ── Datos que antes vivían en localStorage / memoria, ahora vienen del backend ──
   const [productos, setProductos] = useState<ProductoApi[]>([]);
   const [inventario, setInventario] = useState<InventarioItem[]>([]);
+  const [insumosCompra, setInsumosCompra] = useState<InsumoCompra[]>([]);
   const [ventasHoy, setVentasHoy] = useState<VentaLog[]>([]);
   const [comprasHoy, setComprasHoy] = useState<CompraLog[]>([]);
   const [balance, setBalance] = useState<Balance | null>(null);
@@ -120,12 +126,13 @@ export default function App() {
     try {
       setError(null);
       const [catalogo, hist, bal] = await Promise.all([
-        apiGet<{ productos: ProductoApi[]; inventario: InventarioItem[] }>("productos.php"),
+        apiGet<{ productos: ProductoApi[]; inventario: InventarioItem[]; insumos_compra: InsumoCompra[] }>("productos.php"),
         apiGet<{ ventas: VentaLog[]; compras: CompraLog[] }>("historial.php"),
         apiGet<Balance>("balance.php"),
       ]);
       setProductos(catalogo.productos);
       setInventario(catalogo.inventario);
+      setInsumosCompra(catalogo.insumos_compra ?? []);
       setVentasHoy(hist.ventas);
       setComprasHoy(hist.compras);
       setBalance(bal);
@@ -352,13 +359,15 @@ export default function App() {
               <span className="purchase-btn-pan-batch-arrow">›</span>
             </button>
 
-            {/* Misc insumos */}
-            {MISC_PURCHASES.map(p => (
+            {/* Insumos de compra (vienen de la base — agregar uno nuevo en
+                la tabla `productos` con tipo='compra' lo hace aparecer aquí
+                automáticamente, sin tocar este archivo) */}
+            {insumosCompra.map(p => (
               <button key={p.clave} className="purchase-btn"
-                onClick={() => handlePurchase(p.clave, p.amount, p.emoji)}>
+                onClick={() => handlePurchase(p.clave, p.precio, p.emoji)}>
                 <span className="purchase-btn-emoji">{p.emoji}</span>
-                <span className="purchase-btn-label">{p.label}</span>
-                <span className="purchase-btn-price">−{fmt(p.amount)}</span>
+                <span className="purchase-btn-label">{p.nombre}</span>
+                <span className="purchase-btn-price">−{fmt(p.precio)}</span>
               </button>
             ))}
           </div>
@@ -532,13 +541,20 @@ function ProductBtn({ item, multiplier, unitCost, onTap }: {
   const total  = item.precio * qty;
   const cost   = unitCost * qty;
   const margin = total - cost;
-  const colors = PRODUCT_COLORS[item.clave] ?? { bg: "var(--color-surface)", accent: "var(--color-text)" };
+  // Colores vienen de la base (tabla `colores` vía productos.php) — un
+  // producto nuevo con color_id asignado se pinta solo, sin CSS por producto.
+  const bg     = item.fondo  ?? DEFAULT_COLORS.bg;
+  const accent = item.acento ?? DEFAULT_COLORS.accent;
 
   return (
-    <button className={`product-btn product-btn-${item.clave}`} onClick={() => onTap(item)}>
+    <button
+      className="product-btn"
+      style={{ background: bg, borderColor: `color-mix(in srgb, ${accent} 18%, transparent)` }}
+      onClick={() => onTap(item)}
+    >
       <span className="product-btn-emoji">{item.emoji}</span>
       <span className="product-btn-name">{item.nombre}</span>
-      <span className="product-btn-price" style={{ color: colors.accent }}>
+      <span className="product-btn-price" style={{ color: accent }}>
         {qty > 1 ? `${fmt(total)} ×${qty}` : fmt(item.precio)}
       </span>
       <span className="product-btn-cost">

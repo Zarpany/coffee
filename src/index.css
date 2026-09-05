@@ -36,6 +36,9 @@
   --color-pan-accent:  #9a7020;
   --color-gomitas:     #fff0f8;
   --color-gomitas-accent: #a03a70;
+
+  --color-sandwich:        #f0fbf4;
+  --color-sandwich-accent: #1a7a4a;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -266,10 +269,16 @@ body {
 
 .product-btn:active { transform: scale(0.94); }
 
+/* OBSOLETO — el color de cada producto ahora viene de la base de datos
+   (tabla `colores`, vía productos.php) y se aplica con `style` inline
+   en ProductBtn (App.tsx), no con estas clases por producto. Se dejan
+   comentadas como referencia histórica; puedes borrarlas con seguridad.
 .product-btn-cafe    { background: var(--color-cafe);    border-color: color-mix(in srgb, var(--color-cafe-accent) 18%, transparent); }
 .product-btn-leche   { background: var(--color-leche);   border-color: color-mix(in srgb, var(--color-leche-accent) 18%, transparent); }
 .product-btn-pan     { background: var(--color-pan);     border-color: color-mix(in srgb, var(--color-pan-accent) 18%, transparent); }
 .product-btn-gomitas { background: var(--color-gomitas); border-color: color-mix(in srgb, var(--color-gomitas-accent) 18%, transparent); }
+.product-btn-sandwich { background: var(--color-sandwich); border-color: color-mix(in srgb, var(--color-sandwich-accent) 18%, transparent); }
+*/
 
 .product-btn-emoji { font-size: 3rem; line-height: 1; }
 
